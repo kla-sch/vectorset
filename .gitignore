@@ -1,3 +1,33 @@
+# Executables
+tests/testVectorTest_c++11
+tests/testVectorTest_c++14
+tests/testVectorTest_c++17
+tests/testVectorTest_c++20
+benchmark/runBench
+
+
+# Workfiles
+tests/*.xml
+tests/*.json
+
+# Doxygen output
+doc/html/**
+doc/latex/**
+doc/rtf/**
+doc/man/**
+doc/xml/**
+doc/docbook/**
+
+# backup files
+*~
+*.bak
+
+# benchmark / resultfiles
+benchmark/*.csv
+benchmark/*.ods
+
+#### githup standards:
+
 # Prerequisites
 *.d
 
