@@ -805,11 +805,11 @@ INSTANTIATE_TEST_SUITE_P(
     orderedPos2, InsertPos,
     testing::Values(
         InsertPosParam{
-            "basic", 3, 2, true, false,
-            /* = */ 6, false, { 0, 2, 3, 5, 6, 8 }},
+            "basic", 1, 2, true, false,
+            /* = */ 6, false, { 0, 1, 2, 5, 6, 8 }},
         InsertPosParam{
-            "basicMove", 3, 2, true, true,
-            /* = */ 6, true,  { 0, 2, 3, 5, 6, 8 }},
+            "basicMove", 1, 2, true, true,
+            /* = */ 6, true,  { 0, 1, 2, 5, 6, 8 }},
         InsertPosParam{
             "duplicate", 2, 2, true, false,
             /* = */ 5, true, { 0, 2, 5, 6, 8 }},
@@ -1280,8 +1280,8 @@ INSTANTIATE_TEST_SUITE_P(
     orderedPos2, EmplaceHint,
     testing::Values(
         EmplaceHintParam{
-            "basic", 3, 2, true,
-            /* = */ 6, true, { 0, 2, 3, 5, 6, 8 }},
+            "basic", 1, 2, true,
+            /* = */ 6, true, { 0, 1, 2, 5, 6, 8 }},
         EmplaceHintParam{
             "duplicate", 2, 2, true,
             /* = */ 5, true, { 0, 2, 5, 6, 8 }}

@@ -295,26 +295,29 @@ private:
     template<class... Args>
     iterator
     impl_emplace_unique_ordered(const_iterator hint, Args&&... args) {
+        auto hintDistance = std::distance(values.cbegin(), hint);
         values.emplace_back(std::forward<Args>(args)...);
-        auto last = std::prev(values.end());
 
-        if (values.begin() != last) {
-            if ( (hint == values.begin() || comp(*(hint-1), *last))
-                 && (hint == values.end() || comp(*last, *hint)))
+        auto valIter = std::prev(values.end());
+        auto hintIter = std::next(values.begin(), hintDistance);
+
+        if (values.begin() != valIter) {
+            // container was not empty
+
+            if ( (   hintIter == values.begin()
+                     || comp(*std::prev(hintIter), *valIter))
+                 && (hintIter == valIter
+                     || comp(*valIter, *hintIter)))
             {
                 // hint is at the right spot
-                move_into_position(last, hint);
-                auto distance = std::distance(values.cbegin(), hint);
-
-                return std::next(values.begin(), distance);
+                move_into_position(valIter, hintIter);
+                return hintIter;
             }
 
-            if (hint != last && comp_eq(*hint, *last)) {
+            if (hintIter != valIter && comp_eq(*hintIter, *valIter)) {
                 // value exists at hint
                 values.pop_back();
-                auto distance = std::distance(values.cbegin(), hint);
-
-                return std::next(values.begin(), distance);
+                return hintIter;
             }
         }
 
