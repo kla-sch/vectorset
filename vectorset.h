@@ -38,6 +38,157 @@
 #    define VSET_CXX11_empty_constexpr
 #endif
 
+// Debug defines
+#if _VECTOR_SET_DO_TRACE == 1
+
+#ifdef _VECTOR_SET_DEBUG
+#   undef _VECTOR_SET_DEBUG
+#endif
+#define _VECTOR_SET_DEBUG 1
+
+#include <cassert>
+#include <string>
+#include <iostream>
+
+#define _VECTOR_SET_TRACE_SET_NAME(name)                \
+    constexpr auto _vs_trace_method_name = name
+
+#define _VECTOR_SET_TRACE(operation)                                \
+    this->traceElements.emplace_back(                               \
+        _vs_trace_method_name, operation, __FILE__, __LINE__)
+
+#define _VECTOR_SET_TRACE_BOOL(operation, boolVal)                  \
+    if (boolVal) {                                                  \
+        _VECTOR_SET_TRACE(operation ":true");                       \
+    }                                                               \
+    else {                                                          \
+        _VECTOR_SET_TRACE(operation ":false");                      \
+    }
+
+#define _VECTOR_SET_TRACE_INT(operation, intval)                        \
+    _VECTOR_SET_TRACE(                                                  \
+        operation + std::string(":")                                    \
+        + std::to_string(intval))
+
+#define _VECTOR_SET_TRACE_ITER(operation, iter)                         \
+    _VECTOR_SET_TRACE(                                                  \
+        operation + std::string(":")                                    \
+        + dbgValIterToStr(iter))
+
+#define _VECTOR_SET_TRACE_ITER_RANGE(operation, first, last)            \
+    _VECTOR_SET_TRACE(                                                  \
+        operation + std::string(":")                                    \
+        + dbgValIterToStr(first) + " to " + dbgValIterToStr(last))
+
+#define _VECTOR_SET_TRACE_ITER_PAIR(operation, first, second)           \
+    _VECTOR_SET_TRACE(                                                  \
+        operation + std::string(":")                                    \
+        + dbgValIterToStr(first) + " and " + dbgValIterToStr(second))
+
+struct _Vectorset_TraceElement {
+    const std::string name;
+    const std::string operation;
+    const std::string filename;
+    size_t line;
+
+    _Vectorset_TraceElement(
+        const std::string &name,
+        const std::string &operation,
+        const std::string &filename = "",
+        size_t line = 0)
+        : name(name)
+        , operation(operation)
+        , filename(filename)
+        , line(line)
+    { /* empty */ }
+
+    friend std::ostream&
+    operator<<(std::ostream& os, const _Vectorset_TraceElement& logElem) {
+        os << "["
+           << logElem.name
+           << " -> " << logElem.operation;
+        if (!logElem.filename.empty()) {
+            os << " (line: " << logElem.line
+               << " " << logElem.filename << ")";
+        }
+
+        return os << "]";
+    }
+
+    // compare
+    bool
+    operator==(const _Vectorset_TraceElement &other) const noexcept {
+        return (name == other.name && operation == other.operation);
+    }
+};
+
+using _Vectorset_Trace = std::vector<_Vectorset_TraceElement>;
+
+
+// write vector of log elements.
+inline std::ostream&
+operator<<(std::ostream& os, const _Vectorset_Trace& trace) {
+    os << "[ DebugTrace:\n";
+    for (const auto &elem : trace) {
+        os << "  " << elem << "\n";
+    }
+    os << "]";
+
+    return os;
+}
+
+#else // _VECTOR_SET_TRACE  != 1
+#define _VECTOR_SET_TRACE_SET_NAME(name)
+#define _VECTOR_SET_TRACE(operation)
+#define _VECTOR_SET_TRACE_BOOL(operation, boolVal)
+#define _VECTOR_SET_TRACE_INT(operation, intval)
+#define _VECTOR_SET_TRACE_ITER(operation, iter)
+#define _VECTOR_SET_TRACE_ITER_RANGE(operation, first, last)
+#define _VECTOR_SET_TRACE_ITER_PAIR(operation, first, second)
+#endif // _VECTOR_SET_TRACE
+
+#if _VECTOR_SET_DEBUG == 1
+#   define _VECTOR_SET_ASSERT(condition) assert(condition)
+#   if _VECTOR_SET_DO_TRACE != 1
+// check iterators.
+#       undef _VECTOR_SET_TRACE_ITER
+#       define _VECTOR_SET_TRACE_ITER(operation, iter)  \
+    {                                                   \
+        dbgCheckIter(iter);                            \
+    }
+#       undef _VECTOR_SET_TRACE_ITER_RANGE
+#       define _VECTOR_SET_TRACE_ITER_RANGE(operation, first, last)     \
+    {                                                                   \
+        dbgCheckIter(first);                                            \
+        dbgCheckIter(last);                                             \
+    }
+#       undef _VECTOR_SET_TRACE_ITER_PAIR
+#       define _VECTOR_SET_TRACE_ITER_PAIR(operation, first, second)    \
+    {                                                                   \
+        dbgCheckIter(first);                                            \
+        dbgCheckIter(second);                                           \
+    }
+#   endif
+#   define _VECTOR_SET_ASSERT(condition) assert(condition)
+#   define _VECTOR_SET_UNREACHABLE false
+#else
+#   define _VECTOR_SET_ASSERT(condition)
+#   define _VECTOR_SET_UNREACHABLE
+#endif
+
+// Check iterators (only if _VECTOR_SET_DEBUG == 1)
+#define _VECTOR_SET_CHECK_ITER(iter)                    \
+    _VECTOR_SET_ASSERT(                                 \
+        std::distance(values.begin(), iter) >= 0        \
+        && std::distance(values.end(), iter) <= 0)
+
+// Check const iterators (only if _VECTOR_SET_DEBUG == 1)
+#define _VECTOR_SET_CHECK_CONST_ITER(iter)               \
+    _VECTOR_SET_ASSERT(                                  \
+        std::distance(values.cbegin(), iter) >= 0        \
+        && std::distance(values.cend(), iter) <= 0)
+
+
 /// Modes of this vectorset container.
 enum class vectorset_mode : char {
     /// ordered content, unique values (set).
@@ -94,6 +245,67 @@ public:
     using const_reverse_iterator =
         typename vector_type::const_reverse_iterator;
 
+
+#if _VECTOR_SET_DO_TRACE == 1
+    // Debug informations
+
+    /**
+     * get debug trace messages of class.
+     */
+    const _Vectorset_Trace &
+    getDebugTrace() const noexcept {
+        return traceElements;
+    }
+
+    /**
+     * remove all trace log elements.
+     */
+    void
+    clearDebugTrace() {
+        traceElements.clear();
+    }
+
+private:
+
+    mutable _Vectorset_Trace traceElements;
+
+    // get distance of iterator to c.cbegin() as string.
+    std::string
+    dbgValIterToStr(const_iterator iter) const {
+        _VECTOR_SET_CHECK_CONST_ITER(iter);
+        return
+            (std::to_string(std::distance(values.cbegin(), iter))
+             + '('
+             +     std::to_string(std::distance(values.cbegin(), values.cend()))
+             + ')');
+    }
+
+    // get distance of iterator to c.begin() as string.
+    std::string
+    dbgValIterToStr(iterator iter) {
+        _VECTOR_SET_CHECK_ITER(iter);
+        return
+            (std::to_string(std::distance(values.begin(), iter))
+             + '('
+             +     std::to_string(std::distance(values.begin(), values.end()))
+             + ')');
+    }
+#elif _VECTOR_SET_DEBUG == 1
+
+    // check const iterator
+    void
+    dbgCheckIter(const_iterator iter) const {
+        _VECTOR_SET_CHECK_CONST_ITER(iter);
+    }
+
+    // check iterator
+    void
+    dbgCheckIter(iterator iter) {
+        _VECTOR_SET_CHECK_ITER(iter);
+    }
+
+#endif
+
 private:
     /// container class with values.
     vector_type values;
@@ -130,16 +342,27 @@ private:
     template<class ValType>
     std::pair<iterator, bool>
     impl_insert_unique_ordered(ValType&& value) {
+        _VECTOR_SET_TRACE_SET_NAME("impl_insert_unique_ordered(ValType&&)");
+        _VECTOR_SET_TRACE("start");
+
         auto iter =
             std::lower_bound(values.begin(), values.end(), value, comp);
 
+        _VECTOR_SET_TRACE_ITER("lower_bound", iter);
+
         if (iter != values.end() && !comp(value, *iter)) {
+            _VECTOR_SET_TRACE("found-no-insert");
+
             return std::make_pair(iter, false);
         }
         else {
             auto resIter = values.insert(iter, std::forward<ValType>(value));
+            _VECTOR_SET_TRACE_ITER("insert", resIter);
+
             return std::make_pair(resIter, true);
         }
+
+        _VECTOR_SET_ASSERT(_VECTOR_SET_UNREACHABLE);
     }
 
     /**
@@ -155,8 +378,16 @@ private:
     template<class ValType>
     std::pair<iterator, bool>
     impl_insert_unordered(ValType&& value) {
+        _VECTOR_SET_TRACE_SET_NAME("impl_insert_unordered(ValType&&)");
+        _VECTOR_SET_TRACE("start");
+
         values.push_back(std::forward<ValType>(value));
-        return std::make_pair(std::prev(values.end()), true);
+
+        auto result = std::make_pair(std::prev(values.end()), true);
+
+        _VECTOR_SET_TRACE_ITER("push_back", result.first);
+
+        return result;
     }
 
     /**
@@ -170,20 +401,41 @@ private:
     template<class ValType>
     iterator
     impl_insert_unique_ordered(const_iterator pos, ValType&& value) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_insert_unique_ordered(const_iterator,ValType&&)");
+
+        _VECTOR_SET_TRACE_ITER("start", pos);
+
         if (values.begin() != values.end()) {
-            if ( (pos == values.begin() || comp(*(pos-1), value))
+            _VECTOR_SET_TRACE("not-empty");
+
+            if ( (pos == values.begin() || comp(*std::prev(pos), value))
                  && (pos == values.end() || comp(value, *pos)))
             {
-                return values.insert(pos, std::forward<ValType>(value));
+                auto result = values.insert(pos, std::forward<ValType>(value));
+
+                _VECTOR_SET_TRACE_ITER("insert-at-position", result);
+
+                return result;
             }
 
             if (pos != values.end() && comp_eq(*pos, value)) {
+                _VECTOR_SET_TRACE("fount-at-position-no-insert");
+
                 auto distance = std::distance(values.cbegin(), pos);
+
+                _VECTOR_SET_TRACE_INT("next-to-distance", distance);
+
                 return std::next(values.begin(), distance);
             }
         }
 
+        _VECTOR_SET_TRACE("call:impl_insert_unique_ordered(ValType&&)");
+
         auto result = impl_insert_unique_ordered(std::forward<ValType>(value));
+
+        _VECTOR_SET_TRACE_BOOL("insert", result.second);
+        _VECTOR_SET_TRACE_ITER("result", result.first);
 
         return result.first;
     }
@@ -200,7 +452,16 @@ private:
     template<class ValType>
     iterator
     impl_insert_unordered(const_iterator pos, ValType&& value) {
-        return values.insert(pos, std::forward<ValType>(value));
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_insert_unordered(const_iterator pos, ValType&& value)");
+
+        _VECTOR_SET_TRACE_ITER("start", pos);
+
+        auto result = values.insert(pos, std::forward<ValType>(value));
+
+        _VECTOR_SET_TRACE_ITER("result", result);
+
+        return result;
     }
 
 
@@ -214,8 +475,13 @@ private:
      */
     void
     move_into_position(iterator val_iter, const_iterator pos) {
+        _VECTOR_SET_TRACE_SET_NAME("move_into_position");
+        _VECTOR_SET_TRACE_ITER_RANGE("start", val_iter, pos);
+
         while (val_iter != pos) {
-            std::swap(*(val_iter-1), *val_iter);
+            _VECTOR_SET_TRACE_ITER_PAIR("swap", prev(val_iter), val_iter);
+
+            std::swap(*prev(val_iter), *val_iter);
             --val_iter;
         }
     }
@@ -231,23 +497,43 @@ private:
      */
     std::pair<iterator, bool>
     impl_insert_emplace_unique_ordered() {
+        _VECTOR_SET_TRACE_SET_NAME("impl_insert_emplace_unique_ordered");
+
+        _VECTOR_SET_TRACE("start");
+
         auto last = std::prev(values.end());
+
+        _VECTOR_SET_TRACE_ITER("last", last);
+
         auto iter = std::lower_bound(values.begin(), last, *last, comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
 
         if (iter == last) {
             // emplace at end
+
+            _VECTOR_SET_TRACE("emplace-at-and");
+
             return std::make_pair(last, true);
         }
         else if (!comp(*last, *iter)) {
             // value already exists
+
+            _VECTOR_SET_TRACE("*last>=*iter:exists");
+
             values.pop_back();
             return std::make_pair(iter, false);
         }
         else {
             // move value into position
+
+            _VECTOR_SET_TRACE("move-into-position");
+
             move_into_position(last, iter);
             return std::make_pair(iter, true);
         }
+
+        _VECTOR_SET_ASSERT(_VECTOR_SET_UNREACHABLE);
     }
 
 
@@ -260,9 +546,20 @@ private:
     template<class... Args>
     std::pair<iterator, bool>
     impl_emplace_unique_ordered(Args&&... args) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_emplace_unique_ordered(Args&&...)");
+
+        _VECTOR_SET_TRACE("start");
+
         values.emplace_back(std::forward<Args>(args)...);
 
-        return impl_insert_emplace_unique_ordered();
+        auto result = impl_insert_emplace_unique_ordered();
+
+        _VECTOR_SET_TRACE_BOOL("insert", result.second);
+        _VECTOR_SET_TRACE_ITER("iter", result.first);
+
+
+        return result;
     }
 
 
@@ -277,7 +574,17 @@ private:
     template<class... Args>
     std::pair<iterator, bool>
     impl_emplace_unordered(Args&&... args) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_emplace_unordered(Args&&...)");
+
+        _VECTOR_SET_TRACE("start");
+
         values.emplace_back(std::forward<Args>(args)...);
+        auto iter = std::prev(values.end());
+
+        _VECTOR_SET_TRACE_BOOL("insert", true);
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
         return std::make_pair(std::prev(values.end()), true);
     }
 
@@ -290,19 +597,31 @@ private:
      * @param args Constructor arguments.
      *
      * @return result pair: iterator to inserted value and flag, if
-     *         values has been inserted (always `true`).
+     *         values has been inserted.
      */
     template<class... Args>
     iterator
     impl_emplace_unique_ordered(const_iterator hint, Args&&... args) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_emplace_unique_ordered(const_iterator,Args&&...)");
+
+        _VECTOR_SET_TRACE_ITER("start", hint);
+
         auto hintDistance = std::distance(values.cbegin(), hint);
+
+        _VECTOR_SET_TRACE_INT("hintDistance", hintDistance);
+
         values.emplace_back(std::forward<Args>(args)...);
 
         auto valIter = std::prev(values.end());
         auto hintIter = std::next(values.begin(), hintDistance);
 
+        _VECTOR_SET_TRACE_ITER("valIter", valIter);
+        _VECTOR_SET_TRACE_ITER("hintIter", hintIter);
+
         if (values.begin() != valIter) {
             // container was not empty
+            _VECTOR_SET_TRACE("not-empty");
 
             if ( (   hintIter == values.begin()
                      || comp(*std::prev(hintIter), *valIter))
@@ -310,18 +629,28 @@ private:
                      || comp(*valIter, *hintIter)))
             {
                 // hint is at the right spot
+                _VECTOR_SET_TRACE_ITER("hin-on-spot", hintIter);
+
                 move_into_position(valIter, hintIter);
                 return hintIter;
             }
 
             if (hintIter != valIter && comp_eq(*hintIter, *valIter)) {
-                // value exists at hint
+                // value already exists at hint
+
+                _VECTOR_SET_TRACE_ITER("exists-on-hint", hintIter);
+
                 values.pop_back();
                 return hintIter;
             }
         }
 
+        _VECTOR_SET_TRACE("normal-emplace");
+
         auto result = impl_insert_emplace_unique_ordered();
+
+        _VECTOR_SET_TRACE_BOOL("emplaced", result.second);
+        _VECTOR_SET_TRACE_ITER("result", result.first);
 
         return result.first;
     }
@@ -340,7 +669,15 @@ private:
     template<class... Args>
     iterator
     impl_emplace_unordered(const_iterator hint, Args&&... args) {
-        return values.emplace(hint, std::forward<Args>(args)...);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_emplace_unordered(const_iterator, Args&&...)");
+        _VECTOR_SET_TRACE_ITER("start", hint);
+
+        auto iter = values.emplace(hint, std::forward<Args>(args)...);
+        _VECTOR_SET_TRACE_ITER("result", iter);
+
+
+        return iter;
     }
 
 
@@ -353,16 +690,26 @@ private:
      */
     size_type
     impl_erase_unique_ordered(const Key& key) {
-        auto res_pair =
-            std::equal_range(values.begin(), values.end(), key, comp);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_erase_unique_ordered(const Key&)");
+        _VECTOR_SET_TRACE("start");
 
-        if (res_pair.first == res_pair.second) {
-            return 0;
-        }
-        else {
-            values.erase(res_pair.first);
+        auto iter =
+            std::lower_bound(values.begin(), values.end(), key, comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        if (iter != values.end() && !comp(key, *iter)) {
+            _VECTOR_SET_TRACE("found-erase:1");
+            values.erase(iter);
             return 1;
         }
+        else {
+            _VECTOR_SET_TRACE("not-found:0");
+            return 0;
+        }
+
+        _VECTOR_SET_ASSERT(_VECTOR_SET_UNREACHABLE);
     }
 
     /**
@@ -374,17 +721,24 @@ private:
      */
     size_type
     impl_erase_unordered(const Key& key) {
-        auto rm_iter =
+        _VECTOR_SET_TRACE_SET_NAME("impl_erase_unordered(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
+        auto rmIter =
             std::remove_if(
                 values.begin(), values.end(),
                 [&key, this] (const Key &val){
                     return this->comp_eq(key, val);
                 });
-        auto rm_size = std::distance(rm_iter, values.end());
 
-        values.erase(rm_iter, values.end());
+        auto rmSize = std::distance(rmIter, values.end());
 
-        return rm_size;
+        _VECTOR_SET_TRACE_ITER("rmIter", rmIter);
+        _VECTOR_SET_TRACE_INT("rmSize", rmSize);
+
+        values.erase(rmIter, values.end());
+
+        return rmSize;
     }
 
 
@@ -393,10 +747,15 @@ private:
      */
     iterator
     impl_find_unique_ordered(const_reference key) {
-        auto res_pair =
-            std::equal_range(values.begin(), values.end(), key, comp);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_find_unique_ordered(const_reference)");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? end() : res_pair.first);
+        auto iter = std::lower_bound(values.begin(), values.end(), key, comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || comp(key, *iter)) ? end() : iter);
     }
 
     /**
@@ -404,10 +763,15 @@ private:
      */
     const_iterator
     impl_find_unique_ordered(const_reference key) const {
-        auto res_pair =
-            std::equal_range(values.begin(), values.end(), key, comp);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_find_unique_ordered(const_reference)const");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? end() : res_pair.first);
+        auto iter = std::lower_bound(values.begin(), values.end(), key, comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || comp(key, *iter)) ? end() : iter);
     }
 
     /**
@@ -416,9 +780,14 @@ private:
     template<class K>
     iterator
     impl_find_unique_ordered(const K &x) {
-        auto res_pair = std::equal_range(values.begin(), values.end(), x);
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unique_ordered(const K&)");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? end() : res_pair.first);
+        auto iter = std::lower_bound(values.begin(), values.end(), x);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || (x < *iter)) ? end() : iter);
     }
 
 
@@ -428,9 +797,14 @@ private:
     template<class K>
     const_iterator
     impl_find_unique_ordered(const K &x) const {
-        auto res_pair = std::equal_range(values.begin(), values.end(), x);
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unique_ordered(const K&)const");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? end() : res_pair.first);
+        auto iter = std::lower_bound(values.begin(), values.end(), x);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || (x < *iter)) ? end() : iter);
     }
 
     /**
@@ -438,12 +812,19 @@ private:
      */
     iterator
     impl_find_unordered(const_reference key) {
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unordered(const_reference)");
+        _VECTOR_SET_TRACE("start");
+
         auto find_comp =
             [&key, this](const Key &value) {
                 return comp_eq(key, value);
             };
 
-        return std::find_if(values.begin(), values.end(), find_comp);
+        auto iter = std::find_if(values.begin(), values.end(), find_comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
     }
 
     /**
@@ -451,12 +832,19 @@ private:
      */
     const_iterator
     impl_find_unordered(const_reference key) const {
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unordered(const_reference)const");
+        _VECTOR_SET_TRACE("start");
+
         auto find_comp =
             [&key, this](const Key &value) {
                 return comp_eq(key, value);
             };
 
-        return std::find_if(values.begin(), values.end(), find_comp);
+        auto iter = std::find_if(values.begin(), values.end(), find_comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
     }
 
     /**
@@ -465,12 +853,19 @@ private:
     template<class K>
     iterator
     impl_find_unordered(const K& x) {
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unordered(const K&)");
+        _VECTOR_SET_TRACE("start");
+
         auto find_comp =
             [&x](const Key &value) {
                 return !(x < value || value < x);
             };
 
-        return std::find_if(values.begin(), values.end(), find_comp);
+        auto iter = std::find_if(values.begin(), values.end(), find_comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
     }
 
     /**
@@ -479,12 +874,19 @@ private:
     template<class K>
     const_iterator
     impl_find_unordered(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("impl_find_unordered(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         auto find_comp =
             [&x](const Key &value) {
                 return !(x < value || value < x);
             };
 
-        return std::find_if(values.begin(), values.end(), find_comp);
+        auto iter = std::find_if(values.begin(), values.end(), find_comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
     }
 
 
@@ -493,10 +895,15 @@ private:
      */
     size_type
     impl_count_unique_ordered(const_reference key) const {
-        auto res_pair =
-            std::equal_range(values.begin(), values.end(), key, comp);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_count_unique_ordered(const_reference)const");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? 0 : 1);
+        auto iter = std::lower_bound(values.begin(), values.end(), key, comp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || comp(key, *iter)) ? 0 : 1);
     }
 
     /**
@@ -505,9 +912,15 @@ private:
     template<class K>
     size_type
     impl_count_unique_ordered(const K &x) const {
-        auto res_pair = std::equal_range(values.begin(), values.end(), x);
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_count_unique_ordered(const K&)const");
+        _VECTOR_SET_TRACE("start");
 
-        return (res_pair.first == res_pair.second ? 0 : 1);
+        auto iter = std::lower_bound(values.begin(), values.end(), x);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return ((iter == values.end() || (x < *iter)) ? 0 : 1);
     }
 
     /**
@@ -515,6 +928,10 @@ private:
      */
     size_type
     impl_count_unordered(const_reference key) const {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_count_unordered(const_reference)const");
+        _VECTOR_SET_TRACE("start");
+
         auto count_comp =
             [&key, this](const Key &value) {
                 return comp_eq(key, value);
@@ -529,6 +946,9 @@ private:
     template<class K>
     size_type
     impl_count_unordered(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("impl_count_unordered(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         auto count_comp =
             [&x](const Key &value) {
                 return !(x < value || value < x);
@@ -537,68 +957,132 @@ private:
         return std::count_if(values.begin(), values.end(), count_comp);
     }
 
-
+    /**
+     * Equal range for unique ordered mode.
+     */
     template<class Value, class AlgoComp>
     std::pair<iterator,iterator>
-    impl_equal_range(
-        const Value &value,
-        AlgoComp algoComp)
+    impl_equal_range(const Value& value, AlgoComp algoComp)
     {
+        _VECTOR_SET_TRACE_SET_NAME("impl_equal_range(const Value&, AlgoComp)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "equal_range is only available in"
-                " vectorset_mode::unique_ordered");
+                " vectorset_mode::unordered");
         }
 
-        return std::equal_range(values.begin(), values.end(), value, algoComp);
+        auto iter =
+            std::lower_bound(values.begin(), values.end(), value, algoComp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        if (iter == values.end()) {
+            _VECTOR_SET_TRACE("iter-at-end");
+            return std::make_pair(end(), end());
+        }
+
+        if (algoComp(value, *iter)) {
+            _VECTOR_SET_TRACE("value<*iter");
+            return std::make_pair(iter, iter);
+        }
+
+        _VECTOR_SET_TRACE_ITER_RANGE("range", iter, std::next(iter));
+
+        return std::make_pair(iter, std::next(iter));
     }
 
+
+    /**
+     * Equal range for unique ordered mode (const).
+     */
     template<class Value, class AlgoComp>
     std::pair<const_iterator,const_iterator>
-    impl_equal_range(
-        const Value &value,
-        AlgoComp algoComp)
-        const
+    impl_equal_range(const Value& value, AlgoComp algoComp) const
     {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_equal_range(const Value&, AlgoComp)const");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "equal_range is only available in"
-                " vectorset_mode::unique_ordered");
+                " vectorset_mode::unordered");
         }
 
-        return std::equal_range(values.begin(), values.end(), value, algoComp);
+        auto iter =
+            std::lower_bound(values.begin(), values.end(), value, algoComp);
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        if (iter == values.end()) {
+            _VECTOR_SET_TRACE("iter-at-end");
+            return std::make_pair(end(), end());
+        }
+
+        if (algoComp(value, *iter)) {
+            _VECTOR_SET_TRACE("value<*iter");
+            return std::make_pair(iter, iter);
+        }
+
+        _VECTOR_SET_TRACE_ITER_RANGE("range", iter, std::next(iter));
+
+        return std::make_pair(iter, next(iter));
     }
+
 
     template<class Value, class AlgoComp>
     iterator
-    impl_bound_fn(const Value &value, bool lowerBound, AlgoComp algoComp)
+    impl_bound_fn(const Value& value, bool lowerBound, AlgoComp algoComp)
     {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_bound_fn(const Value&,bool,AlgoComp)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "lower_bound and upper_bound are only available"
-                " in vectorset_mode::unique_ordered");
+                " in vectorset_mode::unordered");
         }
 
-        return
+        auto iter =
             (lowerBound
              ? std::lower_bound(values.begin(), values.end(), value, algoComp)
              : std::upper_bound(values.begin(), values.end(), value, algoComp));
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
+
     }
 
     template<class Value, class AlgoComp>
     const_iterator
-    impl_bound_fn(const Value &value, bool lowerBound, AlgoComp algoComp) const
+    impl_bound_fn(const Value& value, bool lowerBound, AlgoComp algoComp) const
     {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "impl_bound_fn(const Value&,bool,AlgoComp)const");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "lower_bound and upper_bound are only available"
                 " in vectorset_mode::unique_ordered");
         }
 
-        return
+        auto iter =
             (lowerBound
              ? std::lower_bound(values.begin(), values.end(), value, algoComp)
              : std::upper_bound(values.begin(), values.end(), value, algoComp));
+
+        _VECTOR_SET_TRACE_ITER("iter", iter);
+
+        return iter;
     }
 
 
@@ -607,15 +1091,20 @@ private:
      */
     void
     make_unique_ordered() {
+        _VECTOR_SET_TRACE_SET_NAME("make_unique_ordered()");
+        _VECTOR_SET_TRACE("start");
+
         std::sort(values.begin(), values.end(), comp);
-        auto rm_iter =
+        auto rmIter =
             unique(
                 values.begin(), values.end(),
                 [this](const Key &lhv, const Key &rhv) {
                     return this->comp_eq(lhv, rhv);
                 });
 
-        values.erase(rm_iter, values.end());
+        _VECTOR_SET_TRACE_ITER("rmIter", rmIter);
+
+        values.erase(rmIter, values.end());
     }
 
 public:
@@ -629,7 +1118,10 @@ public:
      *
      * Constructs empty container.
      */
-    vectorset() : comp(Compare()) { /* empty */ };
+    vectorset() : comp(Compare()) {
+        _VECTOR_SET_TRACE_SET_NAME("vectorset()");
+        _VECTOR_SET_TRACE("construct");
+    };
 
     /**
      * Construct empty container (comparator / allocator).
@@ -641,7 +1133,13 @@ public:
      */
     explicit
     vectorset(const Compare& comp, const Allocator& alloc = Allocator())
-        : values(alloc), comp(comp) { /* empty */ };
+        : values(alloc), comp(comp)
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset"
+            "(const Compare& comp, const Allocator& alloc = Allocator())");
+        _VECTOR_SET_TRACE("construct");
+    };
 
     /**
      * Constructor (allocator).
@@ -651,7 +1149,11 @@ public:
      */
     explicit
     vectorset(const Allocator& alloc)
-        : vectorset(Compare(), alloc) { /* empty */ };
+        : vectorset(Compare(), alloc)
+    {
+        _VECTOR_SET_TRACE_SET_NAME("vectorset(const Allocator& alloc)");
+        _VECTOR_SET_TRACE("construct");
+    };
 
     /**
      * Range constructor (comparator / allocator).
@@ -671,7 +1173,12 @@ public:
         InputIt first, InputIt last,
         const Compare& comp = Compare(),
         const Allocator& alloc = Allocator())
-        : values(first, last, alloc), comp(comp) { /* empty */ };
+        : values(first, last, alloc), comp(comp)
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset(InputIt,InputIt,const Compare&,const Allocator&)");
+        _VECTOR_SET_TRACE("construct");
+    };
 
     /**
      * Range constructor (allocator).
@@ -686,7 +1193,12 @@ public:
      */
     template<class InputIt>
     vectorset(InputIt first, InputIt last, const Allocator& alloc)
-        : vectorset(first, last, Compare(), alloc) { /* empty */ }
+        : vectorset(first, last, Compare(), alloc)
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset(InputIt first, InputIt last, const Allocator& alloc)");
+        _VECTOR_SET_TRACE("construct");
+    }
 
     /**
      * Copy constructor.
@@ -696,14 +1208,14 @@ public:
      */
     vectorset(const vectorset& other)
         : vectorset()
-        {
-            if (this == &other) {
-                return;
-            }
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset(const vectorset& other)");
+        _VECTOR_SET_TRACE("construct");
 
-            values = other.values;
-            op_mode = other.op_mode;
-        };
+        values = other.values;
+        op_mode = other.op_mode;
+    };
 
     /**
      * Move constructor.
@@ -713,15 +1225,14 @@ public:
      */
     vectorset(vectorset&& other)
         : vectorset()
-        {
-            if (this == &other) {
-                return;
-            }
+    {
+        _VECTOR_SET_TRACE_SET_NAME("vectorset(vectorset&& other)");
+        _VECTOR_SET_TRACE("construct");
 
-            values = std::move(other.values);
-            op_mode = other.op_mode;
-            other.op_mode = vectorset_mode::unordered;
-        }
+        values = std::move(other.values);
+        op_mode = other.op_mode;
+        other.op_mode = vectorset_mode::unordered;
+    }
 
 
     /**
@@ -734,14 +1245,20 @@ public:
      */
     vectorset(vectorset&& other, const Allocator& alloc)
         : vectorset(alloc)
-        {
-            if (this == &other) {
-                return;
-            }
+    {
+        _VECTOR_SET_TRACE_SET_NAME("vectorset(vectorset&& other)");
+        _VECTOR_SET_TRACE("construct");
 
-            values = std::move(other.values);
-            op_mode = other.op_mode;
+        if (this == &other) {
+            _VECTOR_SET_TRACE("self-move");
+            return;
         }
+
+        _VECTOR_SET_TRACE("move-values");
+
+        values = std::move(other.values);
+        op_mode = other.op_mode;
+    }
 
     /**
      * Initializer-list constructor (comparator / allocator).
@@ -756,7 +1273,14 @@ public:
         std::initializer_list<value_type> init,
         const Compare& comp = Compare(),
         const Allocator& alloc = Allocator())
-        : values(init, alloc), comp(comp) { /* empty */ }
+        : values(init, alloc), comp(comp)
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset("
+                "std::initializer_list<value_type>,"
+                "const Compare&,const Allocator&)");
+        _VECTOR_SET_TRACE("construct");
+    }
 
     /**
      * Initializer-list constructor (allocator).
@@ -766,8 +1290,14 @@ public:
      * @param alloc Allocator to use for all memory allocations
      *              of this container.
      */
-    vectorset(std::initializer_list<value_type> init, const Allocator& alloc )
-        : vectorset(init, Compare(), alloc) { /* empty*/ }
+    vectorset(std::initializer_list<value_type> init, const Allocator& alloc)
+        : vectorset(init, Compare(), alloc)
+    {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "vectorset(std::initializer_list<value_type> init,"
+            " const Allocator& alloc )");
+        _VECTOR_SET_TRACE("construct");
+    }
 
     /// @}
 
@@ -784,6 +1314,8 @@ public:
     VSET_CXX11_empty_constexpr
     allocator_type
     get_allocator() const noexcept {
+        _VECTOR_SET_TRACE_SET_NAME("get_allocator()");
+        _VECTOR_SET_TRACE("start");
         return values.get_allocator();
     }
 
@@ -803,17 +1335,25 @@ public:
      */
     void
     set_mode(vectorset_mode op_mode) {
+        _VECTOR_SET_TRACE_SET_NAME("set_mode(vectorset_mode)");
+        _VECTOR_SET_TRACE("start");
+
         if (this->op_mode == op_mode) {
+            _VECTOR_SET_TRACE("mode-equal");
             return;
         }
 
         if (op_mode == vectorset_mode::unordered) {
+            _VECTOR_SET_TRACE("mode-unordered");
             this->op_mode = vectorset_mode::unordered;
             return;
         }
 
-        make_unique_ordered();
+        if (!values.empty()) {
+            make_unique_ordered();
+        }
 
+        _VECTOR_SET_TRACE("mode-ordered");
         this->op_mode = vectorset_mode::unique_ordered;
     }
 
@@ -826,6 +1366,9 @@ public:
      */
     vectorset_mode
     get_mode() const noexcept {
+        _VECTOR_SET_TRACE_SET_NAME("get_mode() const noexcept");
+        _VECTOR_SET_TRACE("start");
+
         return op_mode;
     }
 
@@ -848,9 +1391,16 @@ public:
      */
     vectorset&
     operator=(const vectorset& other) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "operator=(const vectorset& other)");
+        _VECTOR_SET_TRACE("start");
+
         if (this == &other) {
+            _VECTOR_SET_TRACE("self-copy");
             return *this;
         }
+
+        _VECTOR_SET_TRACE("copy-values");
 
         values = other.values;
         op_mode = other.op_mode;
@@ -872,9 +1422,16 @@ public:
      */
     vectorset&
     operator=(vectorset&& other) noexcept {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "operator=(vectorset&& other) noexcept");
+        _VECTOR_SET_TRACE("start");
+
         if (this == &other) {
+            _VECTOR_SET_TRACE("self-move");
             return *this;
         }
+
+        _VECTOR_SET_TRACE("move-values");
 
         values = move(other.values);
         op_mode = other.op_mode;
@@ -893,8 +1450,13 @@ public:
      */
     vectorset&
     operator=(std::initializer_list<value_type> ilist) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "operator=(std::initializer_list<value_type> ilist)");
+        _VECTOR_SET_TRACE("start");
+
         copy(ilist.begin(), ilist.end(), back_inserter(values));
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("sort-vector");
             make_unique_ordered();
         }
     }
@@ -942,6 +1504,7 @@ public:
     VSET_CXX11_empty_constexpr
     reference
     operator[](size_type pos) {
+        _VECTOR_SET_ASSERT(pos < values.size());
         return values[pos];
     }
 
@@ -955,6 +1518,7 @@ public:
     VSET_CXX11_empty_constexpr
     const_reference
     operator[](size_type pos) const {
+        _VECTOR_SET_ASSERT(pos < values.size());
         return values[pos];
     }
 
@@ -1293,8 +1857,12 @@ public:
     template<class InputIt>
     void
     insert(InputIt first, InputIt last) {
+        _VECTOR_SET_TRACE_SET_NAME("insert(InputIt,InputIt)");
+        _VECTOR_SET_TRACE("start");
+
         values.insert(values.end(), first, last);
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("call:make_unique_ordered()");
             make_unique_ordered();
         }
     }
@@ -1312,8 +1880,13 @@ public:
      */
     void
     insert(std::initializer_list<value_type> ilist) {
+        _VECTOR_SET_TRACE_SET_NAME(
+            "insert(std::initializer_list<value_type>)");
+        _VECTOR_SET_TRACE("start");
+
         values.insert(values.end(), ilist);
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("call:make_unique_ordered()");
             make_unique_ordered();
         }
     };
@@ -1376,6 +1949,9 @@ public:
     VSET_CXX11_empty_constexpr
     iterator
     erase(const_iterator pos) {
+        _VECTOR_SET_TRACE_SET_NAME("erase(const_iterator)");
+        _VECTOR_SET_TRACE_ITER("start", pos);
+
         return values.erase(pos);
     }
 
@@ -1390,6 +1966,9 @@ public:
     VSET_CXX11_empty_constexpr
     iterator
     erase(const_iterator first, const_iterator last) {
+        _VECTOR_SET_TRACE_SET_NAME("erase(const_iterator,const_iterator)");
+        _VECTOR_SET_TRACE_ITER_RANGE("start", first, last);
+
         return values.erase(first, last);
     }
 
@@ -1422,7 +2001,11 @@ public:
     VSET_CXX11_empty_constexpr
     void
     push_back(const Key& value) {
+        _VECTOR_SET_TRACE_SET_NAME("push_back(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "push_back is only available in vectorset_mode::unordered");
         }
@@ -1443,7 +2026,11 @@ public:
     VSET_CXX11_empty_constexpr
     void
     push_back(Key&& value) {
+        _VECTOR_SET_TRACE_SET_NAME("push_back(Key&&)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
                 "push_back is only available in vectorset_mode::unordered");
         }
@@ -1457,6 +2044,9 @@ public:
     VSET_CXX11_empty_constexpr
     void
     pop_back() {
+        _VECTOR_SET_TRACE_SET_NAME("pop_back()");
+        _VECTOR_SET_TRACE("start");
+
         values.pop_back();
     }
 
@@ -1473,9 +2063,14 @@ public:
     VSET_CXX11_empty_constexpr
     void
     resize(size_type count) {
+        _VECTOR_SET_TRACE_SET_NAME("resize(size_type)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unique_ordered && count > size()) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
-                "resize cannot expand container in vectorset_mode::unordered");
+                "resize cannot expand container"
+                " in vectorset_mode::unique_ordered");
         }
 
         values.resize(count);
@@ -1493,9 +2088,14 @@ public:
     VSET_CXX11_empty_constexpr
     void
     resize(size_type count, const value_type& value) {
+        _VECTOR_SET_TRACE_SET_NAME("resize(size_type,const value_type&)");
+        _VECTOR_SET_TRACE("start");
+
         if (op_mode == vectorset_mode::unique_ordered) {
+            _VECTOR_SET_TRACE("logic_error");
             throw std::logic_error(
-                "resize cannot expand container in vectorset_mode::unordered");
+                "resize cannot expand container"
+                " in vectorset_mode::unique_ordered");
         }
 
         values.resize(count, value);
@@ -1509,6 +2109,9 @@ public:
      */
     void
     swap(vectorset& other) noexcept {
+        _VECTOR_SET_TRACE_SET_NAME("swap(vectorset&)");
+        _VECTOR_SET_TRACE("start");
+
         values.swap(other.values);
         std::swap(op_mode, other.op_mode);
     }
@@ -1529,6 +2132,9 @@ public:
      */
     size_type
     count(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("count(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_count_unique_ordered(key)
                 : impl_count_unordered(key));
@@ -1545,6 +2151,9 @@ public:
     template<class K>
     size_type
     count(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("count(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_count_unique_ordered(x)
                 : impl_count_unordered(x));
@@ -1561,6 +2170,9 @@ public:
      */
     iterator
     find(const Key& key) {
+        _VECTOR_SET_TRACE_SET_NAME("find(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_find_unique_ordered(key)
                 : impl_find_unordered(key));
@@ -1576,6 +2188,9 @@ public:
      */
     const_iterator
     find(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("find(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_find_unique_ordered(key)
                 : impl_find_unordered(key));
@@ -1593,6 +2208,9 @@ public:
     template<class K>
     iterator
     find(const K& x) {
+        _VECTOR_SET_TRACE_SET_NAME("find(const K&)");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_find_unique_ordered(x)
                 : impl_find_unordered(x));
@@ -1610,6 +2228,9 @@ public:
     template<class K>
     const_iterator
     find(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("find(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (op_mode == vectorset_mode::unique_ordered
                 ? impl_find_unique_ordered(x)
                 : impl_find_unordered(x));
@@ -1625,6 +2246,9 @@ public:
      */
     bool
     contains(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("contains(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (find(key) != end());
     }
 
@@ -1639,6 +2263,9 @@ public:
     template<class K>
     bool
     contains(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("contains(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         return (find(x) != end());
     }
 
@@ -1654,6 +2281,9 @@ public:
      */
     std::pair<iterator,iterator>
     equal_range(const Key& key) {
+        _VECTOR_SET_TRACE_SET_NAME("equal_range(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
         return impl_equal_range(key, comp);
     };
 
@@ -1668,6 +2298,9 @@ public:
      */
     std::pair<const_iterator,const_iterator>
     equal_range(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("equal_range(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return impl_equal_range(key, comp);
     }
 
@@ -1686,6 +2319,9 @@ public:
     template<class K>
     std::pair<iterator,iterator>
     equal_range(const K& x) {
+        _VECTOR_SET_TRACE_SET_NAME("equal_range(const K&)");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1707,6 +2343,9 @@ public:
     template< class K >
     std::pair<const_iterator,const_iterator>
     equal_range(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("equal_range(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1725,6 +2364,9 @@ public:
      */
     iterator
     lower_bound(const Key& key) {
+        _VECTOR_SET_TRACE_SET_NAME("lower_bound(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
         return impl_bound_fn(key, true, comp);
     }
 
@@ -1737,6 +2379,9 @@ public:
      */
     const_iterator
     lower_bound(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("lower_bound(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return impl_bound_fn(key, true, comp);
     }
 
@@ -1753,6 +2398,9 @@ public:
     template<class K>
     iterator
     lower_bound(const K& x) {
+        _VECTOR_SET_TRACE_SET_NAME("lower_bound(const K&)");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1772,6 +2420,9 @@ public:
     template<class K>
     const_iterator
     lower_bound(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("lower_bound(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1790,6 +2441,9 @@ public:
      */
     iterator
     upper_bound(const Key& key) {
+        _VECTOR_SET_TRACE_SET_NAME("upper_bound(const Key&)");
+        _VECTOR_SET_TRACE("start");
+
         return impl_bound_fn(key, false, comp);
     }
 
@@ -1802,6 +2456,9 @@ public:
      */
     const_iterator
     upper_bound(const Key& key) const {
+        _VECTOR_SET_TRACE_SET_NAME("upper_bound(const Key&)const");
+        _VECTOR_SET_TRACE("start");
+
         return impl_bound_fn(key, false, comp);
     }
 
@@ -1818,6 +2475,9 @@ public:
     template<class K>
     iterator
     upper_bound(const K& x) {
+        _VECTOR_SET_TRACE_SET_NAME("upper_bound(const K&)");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1837,6 +2497,9 @@ public:
     template<class K>
     const_iterator
     upper_bound(const K& x) const {
+        _VECTOR_SET_TRACE_SET_NAME("upper_bound(const K&)const");
+        _VECTOR_SET_TRACE("start");
+
         auto x_comp =
             [](const auto &lhv, const auto &rhv) {
                 return (lhv < rhv);
@@ -1878,12 +2541,12 @@ public:
 }; // class vectorset
 
 
-
-
 #if __cplusplus >= 202002L // c++20
 
 /**
  * Three way compare of `vectorset`.
+ *
+ * Requires *C++20* or higher.
  *
  * @param lhs Left hand side.
  * @param rhs Right hand side.
@@ -1891,7 +2554,7 @@ public:
  * @return Comparison category type (`std::lexicographical_compare_three_way`).
  */
 template<class T, class Compare, class Alloc>
-constexpr auto
+inline constexpr auto
 operator<=>(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1909,7 +2572,7 @@ operator<=>(
  * @return `true` if `lhs == rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-constexpr bool
+inline constexpr bool
 operator==(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1928,7 +2591,7 @@ operator==(
  * @return `true` if `lhs == rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator==(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1945,7 +2608,7 @@ operator==(
  * @return `true` if `lhs != rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator!=(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1962,7 +2625,7 @@ operator!=(
  * @return `true` if `lhs < rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator<(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1979,7 +2642,7 @@ operator<(
  * @return `true` if `lhs <= rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator<=(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -1996,7 +2659,7 @@ operator<=(
  * @return `true` if `lhs > rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator>(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)
@@ -2013,7 +2676,7 @@ operator>(
  * @return `true` if `lhs >= rhs` (`std::lexicographical_compare`).
  */
 template<class T, class Compare, class Alloc>
-bool
+inline bool
 operator>=(
     const vectorset<T, Compare, Alloc>& lhs,
     const vectorset<T, Compare, Alloc>& rhs)

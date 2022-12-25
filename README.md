@@ -20,6 +20,80 @@ If you need a documentation, just start `docygen` in folter `doc` and copy image
     ~/vectorset/doc$ doxygen
     ~/vectorset/doc$ cp -r ../README_images/ html/
 
+## Example
+
+    #include <iostream>
+    #include <vectorset.h>
+
+    int main() {
+        vectorset<int> values = {5, 3, 1, 0, 2, 5 };
+
+        // standard: unsorted mode (slow find with std::find):
+        auto unsortedIter = values.find(2);
+        std::cout << "unsorted find pos: "
+                  << std::distance(values.begin(), unsortedIter) << '\n';
+
+        // switch to sorted mode (fast find):
+        values.set_mode(vectorset_mode::unique_ordered);
+        auto sortedIter = values.find(2);
+        std::cout << "sorted find pos: "
+                  << std::distance(values.begin(), sortedIter) << '\n';
+
+        // duplicate, not inserted:
+        std::cout << "sorted size: "
+                  << values.size() << '\n';
+        values.insert(5);
+        std::cout << "sorted size after insert 5: "
+                  << values.size() << '\n';
+
+        // slow insert in sorted mode:
+        values.insert(6);
+        std::cout << "sorted size after insert 6: "
+                  << values.size() << '\n';
+
+        // switch back to unsorted mode (fast inserts):
+        values.set_mode(vectorset_mode::unordered);
+
+        // fast insert (push_back):
+        values.insert({ 5, 6, 7, 8 });
+        std::cout << "unsorted size after insert { 5, 6, 7, 8 }: "
+                  << values.size() << '\n';
+
+        // switch back to sorted mode again:
+        values.set_mode(vectorset_mode::unique_ordered);
+        std::cout << "sorted size after switch: "
+                  << values.size() << '\n';
+
+        return 0;
+    }
+
+Expected outputs:
+
+    unsorted find pos: 4
+    sorted find pos: 2
+    sorted size: 5
+    sorted size after insert 5: 5
+    sorted size after insert 6: 6
+    unsorted size after insert { 5, 6, 7, 8 }: 10
+    sorted size after switch: 8
+
+## Debug mode
+
+Before including `vectorset.h` the macro
+`_VECTOR_SET_DEBUG=1` can be defined. In this case all passed
+iterators of the class and the index of the square bracket operator
+are checked.
+
+Effected methods are:
+
+    iterator insert(const_iterator pos, const value_type& value)
+    iterator insert(const_iterator pos, value_type&& value)
+    iterator emplace_hint(const_iterator hint, Args&&... args)
+    iterator erase(const_iterator pos)
+    iterator erase(const_iterator first, const_iterator last)
+    reference operator[](size_type pos)
+    const_reference operator[](size_type pos)
+
 ## Performance
 
 Pro:

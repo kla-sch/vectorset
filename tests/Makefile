@@ -38,11 +38,39 @@ GOOGLETESTBUILD = $(GOOGLETESTPATH)/build
 CPP = c++
 # CPP = clang++
 
-OBJS = \
-	vectorset_test_c++11.o \
-	vectorset_test_c++14.o \
-	vectorset_test_c++17.o \
-	vectorset_test_c++20.o
+SRCS = \
+	vectorset_test.cpp \
+	TestUtils.cpp \
+	Constructor.cpp \
+	ModeSwitch.cpp \
+	ConstructorCopyMove.cpp \
+	Insert.cpp \
+	InsertPos.cpp \
+	InsertByIter.cpp \
+	InsertByInitList.cpp \
+	Emplace.cpp \
+	EmplaceHint.cpp \
+	EraseAtPos.cpp \
+	EraseRange.cpp \
+	EraseByKey.cpp \
+	VectorManipulation.cpp \
+	MiscManipulationSwap.cpp \
+	Count.cpp \
+	Find.cpp \
+	Contains.cpp \
+	RangeBound.cpp \
+	Comparators.cpp \
+	Allocators.cpp \
+	CompBoolOp.cpp \
+	CompThreeWayOp.cpp \
+	Debug.cpp
+
+OBJS_11 = $(SRCS:%.cpp=objs_c++11/%.o)
+OBJS_14 = $(SRCS:%.cpp=objs_c++14/%.o)
+OBJS_17 = $(SRCS:%.cpp=objs_c++17/%.o)
+OBJS_20 = $(SRCS:%.cpp=objs_c++20/%.o)
+
+OBJS = $(OBJS_11) $(OBJS_14) $(OBJS_17) $(OBJS_20)
 
 VECTORSET_H = ../vectorset.h
 
@@ -52,7 +80,7 @@ EXES = \
 	testVectorTest_c++17 \
 	testVectorTest_c++20
 
-CCFLAGS= -Wall -O3 \
+CCFLAGS= -Wall -O3 -MMD \
 	-I.. -I$(GOOGLETESTPATH)/googletest/include
 
 LDFLAGS = -L$(GOOGLETESTBUILD)/lib  -lgtest -lpthread
@@ -72,39 +100,56 @@ check: $(EXES)
 	./testVectorTest_c++17 --gtest_brief=1
 	./testVectorTest_c++20 --gtest_brief=1
 
+testVectorTest_c++11: objs_c++11 $(GOOGLETESTBUILD) $(OBJS_11)
+	@echo "link for c++11: $@ "
+	@$(CPP) -std=c++11 -o $@  $(OBJS_11) $(CCFLAGS) $(LDFLAGS)
 
-testVectorTest_c++11: $(GOOGLETESTBUILD) vectorset_test_c++11.o
-	$(CPP) -o $@  vectorset_test_c++11.o -std=c++11 $(CCFLAGS) $(LDFLAGS)
+testVectorTest_c++14: objs_c++14 $(GOOGLETESTBUILD) $(OBJS_14)
+	@echo "link for c++14: $@ "
+	@$(CPP) -std=c++14 -o $@  $(OBJS_14) $(CCFLAGS) $(LDFLAGS)
 
-testVectorTest_c++14: $(GOOGLETESTBUILD) vectorset_test_c++14.o
-	$(CPP) -o $@  vectorset_test_c++14.o -std=c++14 $(CCFLAGS) $(LDFLAGS)
+testVectorTest_c++17: objs_c++17 $(GOOGLETESTBUILD) $(OBJS_17)
+	@echo "link for c++17: $@ "
+	@$(CPP) -std=c++17 -o $@  $(OBJS_17) $(CCFLAGS) $(LDFLAGS)
 
-testVectorTest_c++17: $(GOOGLETESTBUILD) vectorset_test_c++17.o
-	$(CPP) -o $@  vectorset_test_c++17.o -std=c++14 $(CCFLAGS) $(LDFLAGS)
+testVectorTest_c++20: objs_c++20 $(GOOGLETESTBUILD) $(OBJS_20)
+	@echo "link for c++20: $@ "
+	@$(CPP) -std=c++20 -o $@  $(OBJS_20) $(CCFLAGS) $(LDFLAGS)
 
-testVectorTest_c++20: $(GOOGLETESTBUILD) vectorset_test_c++20.o
-	$(CPP) -o $@  vectorset_test_c++20.o -std=c++14 $(CCFLAGS) $(LDFLAGS)
-
+objs_c++11 objs_c++14 objs_c++17 objs_c++20:
+	@echo "Create object dir: $@"
+	@mkdir $@
 
 $(GOOGLETESTBUILD):
 	mkdir $(GOOGLETESTBUILD)
 	( cd $(GOOGLETESTBUILD); cmake ..)
 	make -C $(GOOGLETESTBUILD)
 
-vectorset_test_c++11.o: vectorset_test.cpp $(VECTORSET_H)
-	$(CPP) -std=c++11 $(CCFLAGS) -c vectorset_test.cpp -o $@
-
-vectorset_test_c++14.o: vectorset_test.cpp $(VECTORSET_H)
-	$(CPP) -std=c++14 $(CCFLAGS) -c vectorset_test.cpp -o $@
-
-vectorset_test_c++17.o: vectorset_test.cpp $(VECTORSET_H)
-	$(CPP) -std=c++17 $(CCFLAGS) -c vectorset_test.cpp -o $@
-
-vectorset_test_c++20.o: vectorset_test.cpp $(VECTORSET_H)
-	$(CPP) -std=c++20 $(CCFLAGS) -c vectorset_test.cpp -o $@
-
 clean:
-	rm -f $(EXES) $(OBJS)
+	@echo remove object files and executables
+	@rm -f $(EXES) $(OBJS)
 
-%.o:%.cpp
-	$(CPP) $(CCFLAGS) -c $< -o $@
+extra_clean: clean
+	@echo extra clean
+	@rm -rf objs_c++11 objs_c++14 objs_c++17 objs_c++20
+
+objs_c++11/%.o: %.cpp
+	@echo "compile for c++11: $<"
+	@$(CPP) -std=c++11 $(CCFLAGS) -c $< -o $@
+
+objs_c++14/%.o: %.cpp
+	@echo "compile for c++14: $<"
+	@$(CPP) -std=c++14 $(CCFLAGS) -c $< -o $@
+
+objs_c++17/%.o: %.cpp
+	@echo "compile for c++17: $<"
+	@$(CPP) -std=c++17 $(CCFLAGS) -c $< -o $@
+
+objs_c++20/%.o: %.cpp
+	@echo "compile for c++20: $<"
+	@$(CPP) -std=c++20 $(CCFLAGS) -c $< -o $@
+
+-include objs_c++11/*.d
+-include objs_c++14/*.d
+-include objs_c++17/*.d
+-include objs_c++20/*.d
